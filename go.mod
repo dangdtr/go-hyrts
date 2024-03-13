@@ -1,4 +1,4 @@
-module go-hyrts
+module  github.com/dangdtr/go-hyrts
 
 go 1.19
 
