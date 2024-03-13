@@ -1,4 +1,4 @@
-module proposal2
+module go-hyrts
 
 go 1.19
 

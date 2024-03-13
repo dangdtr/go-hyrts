@@ -3,7 +3,7 @@ package package1
 import (
 	"strings"
 
-	"proposal2/src/package2"
+	"go-hyrts/src/package2"
 )
 
 func GetUserInfo(name string, age int) string {

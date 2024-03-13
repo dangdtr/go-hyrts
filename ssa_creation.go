@@ -21,7 +21,7 @@ var (
 
 func GetSSA() (*ssa.Program, []*ssa.Package) {
 
-	pattern := "proposal2"
+	pattern := "go-hyrts"
 
 	cfg := &packages.Config{
 		Mode:  packages.LoadAllSyntax,
@@ -98,7 +98,7 @@ func GetSSA() (*ssa.Program, []*ssa.Package) {
 func GetSSAFromLoadPackages() {
 	// Load, parse, and type-check the initial packages.
 	cfg := &packages.Config{Mode: packages.LoadSyntax}
-	initial, err := packages.Load(cfg, "proposal2")
+	initial, err := packages.Load(cfg, "go-hyrts")
 	if err != nil {
 		log.Fatal(err)
 	}
