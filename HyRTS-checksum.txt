@@ -1,2 +1,0 @@
-/Users/dangdt/Documents/coding/go-hyrts/proposal2/src/package1/file1.go=bf30fd987533001b782e4014256d5793,GetUserInfo=b484a01e76d583f2cea67d7a7b284fd7,JoinStrings=0fb4631037a2eac16291add90d91deec
-/Users/dangdt/Documents/coding/go-hyrts/proposal2/src/package2/file2.go=f9322528a49742a6d357f9c7bce224c3,UserInfo=11c4059750d8ee0a5418af85774f2422
