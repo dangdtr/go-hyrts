@@ -8,14 +8,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	jiraCLIHelpLink  = "https://github.com/ankitpokhrel/jira-cli#getting-started"
-	jiraAPITokenLink = "https://id.atlassian.com/manage-profile/security/api-tokens"
-)
-
 var (
-	config string
-	debug  bool
+	debug bool
 )
 
 func init() {

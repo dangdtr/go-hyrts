@@ -1,8 +1,7 @@
 package hyrts
 
 import (
-	"fmt"
-
+	"github.com/dangdtr/go-hyrts/internal/core/rts/hybrid_rts"
 	"github.com/spf13/cobra"
 )
 
@@ -17,11 +16,9 @@ func NewCmdHyRTS() *cobra.Command {
 
 	cmd.Flags().SortFlags = false
 
-	cmd.Flags().String("run", "", "Run Go HyRTS")
-
 	return &cmd
 }
 
 func initialize(cmd *cobra.Command, _ []string) {
-	fmt.Println("Running go-hyrts")
+	hybrid_rts.Run()
 }
