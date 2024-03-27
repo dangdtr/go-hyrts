@@ -1,2 +1,2 @@
 /Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example/package1/file1.go=f25af46d118d8b8bfdcae3585a44d8a7,GetUserInfo=1581ce999476c37c70d3e880a00abbc6,JoinStrings=0fb4631037a2eac16291add90d91deec
-/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example/package2/file2.go=345f037e1d6d10c797b277194c0b3b44,User=996878ce720be7de324e8e73814ca57d,UserInterface=6710f20e04c66b38469cdefd8cce151a,UserInfo=11c4059750d8ee0a5418af85774f2422
+/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example/package2/file2.go=d6f1c3ebf67383a07f173a910231fa46,User=3fdcf16c6f282b332834df9515fcb784,UserInterface=6710f20e04c66b38469cdefd8cce151a,UserInfo=11c4059750d8ee0a5418af85774f2422

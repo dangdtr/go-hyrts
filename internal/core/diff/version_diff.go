@@ -40,13 +40,23 @@ func (v *versionDiff) Run() {
 }
 
 func (v *versionDiff) diff() {
+	newFilesShadow := make(map[string]string)
+	for key, value := range v.newFiles {
+		newFilesShadow[key] = value
+	}
+
 	for key := range v.oldFiles {
-		if _, containsKey := v.newFiles[key]; !containsKey {
+		if _, containsKey := newFilesShadow[key]; !containsKey {
 			v.deletedFiles[key] = true
 
-		} else if v.newFiles[key] != v.oldFiles[key] {
+		} else if containsKey && newFilesShadow[key] != v.oldFiles[key] {
 			v.changedFiles[key] = true
 			v.atomicLevelDiff() //todo
 		}
+		delete(newFilesShadow, key)
+	}
+
+	for key := range newFilesShadow {
+		v.addedFiles[key] = true
 	}
 }
