@@ -12,6 +12,7 @@ type User struct {
 
 type UserInterface interface {
 	UserInfo(user User) string
+	UserInfo2(user User) string
 }
 
 // UserInfo says Hello

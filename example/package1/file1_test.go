@@ -18,7 +18,7 @@ func TestJoinStrings(t *testing.T) {
 	words := []string{"Hello", "World"}
 	result := JoinStrings(words)
 
-	expectedResult := "Hello, World"
+	expectedResult := "Hello,World"
 	if result != expectedResult {
 		t.Errorf("JoinStrings result is incorrect, got: %s, want: %s", result, expectedResult)
 	}

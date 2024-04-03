@@ -26,7 +26,7 @@ func (v *versionDiff) deserializeOldContents() {
 
 	for _, line := range lines {
 		parts := strings.Split(line, ",")
-		if len(parts) < 2 {
+		if len(parts) == 0 {
 			continue
 		}
 
@@ -80,7 +80,7 @@ func (v *versionDiff) parseAndSerializeNewContents() {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(path, "_test.go") {
+		if !info.IsDir() && strings.HasSuffix(info.Name(), util.GoExt) && !strings.HasSuffix(info.Name(), util.GoTestExt) {
 
 			content, err := ioutil.ReadFile(path)
 			if err != nil {
@@ -94,8 +94,11 @@ func (v *versionDiff) parseAndSerializeNewContents() {
 				return err
 			}
 
-			v.newFiles[path] = fileChecksum
-			v.newFileMeths[path] = meths
+			//shortPath := strings.TrimSuffix(path, "/Users/dangdt/teko/footprint/")
+			shortPath := util.ShortPath(path)
+
+			v.newFiles[shortPath] = fileChecksum
+			v.newFileMeths[shortPath] = meths
 
 		}
 		return nil
