@@ -26,6 +26,7 @@ type VersionDiff interface {
 	GetAFs() map[string]string
 	GetCFs() map[string]string
 	GetDFs() map[string]string
+	GetNewFileMeths() map[string]map[string]string
 }
 
 func NewVersionDiff() VersionDiff {
@@ -58,11 +59,16 @@ func (v *versionDiff) GetDFs() map[string]string {
 func (v *versionDiff) GetAFs() map[string]string {
 	return v.AFs
 }
+
+func (v *versionDiff) GetNewFileMeths() map[string]map[string]string {
+	return v.newFileMeths
+}
+
 func (v *versionDiff) Run() {
 	v.deserializeOldContents()
 	v.parseAndSerializeNewContents()
 	v.diff()
-	v.cleanContents()
+	//v.cleanContents()
 }
 
 func (v *versionDiff) diff() {

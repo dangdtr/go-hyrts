@@ -2,6 +2,7 @@ package hybrid_rts
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dangdtr/go-hyrts/internal/core/coverage"
@@ -13,7 +14,7 @@ func Run() map[string]bool {
 	versionDiff := diff.NewVersionDiff()
 	versionDiff.Run()
 
-	tracer := coverage.NewCov()
+	tracer := coverage.NewCov(versionDiff.GetNewFileMeths())
 	tracer.Run()
 
 	startTime := time.Now()
@@ -27,66 +28,49 @@ func Run() map[string]bool {
 		if len(tracer.GetTestCovMap()) == 0 {
 			return included
 		} else {
-			for testFile := range tracer.GetTestCovMap() {
+			for testFile, testDeps := range tracer.GetTestCovMap() {
 				//testPath := filepath.Join(Properties_OLD_DIR, test)
 
-				//depsMap := tracer.GetTestCovMap()[testFile]
+				for fileDep, _ := range testDeps {
+					parts := strings.Split(fileDep, ":")
 
-				exists := versionDiff.GetChangedFiles()[testFile]
-				isAffect := isAffected(versionDiff, tracer.GetTestCovMap()[testFile], util.TracerCovType)
-				fmt.Println(exists, isAffect)
-				if _, exists := versionDiff.GetChangedFiles()[testFile]; exists && isAffected(versionDiff, tracer.GetTestCovMap()[testFile], util.TracerCovType) {
+					exists := versionDiff.GetChangedFiles()[parts[0]]
+					//fmt.Println(exists)
 
-					//keyRun := fmt.Sprintf("%s:%s", testFile, testName)
-					included[testFile] = true
-					//if util.NewDir != util.OldDir {
-					//	oldVPath := getTestCovFilePath(util.OldDir, test)
-					//	newVPath := getTestCovFilePath(util.NewDir, test)
-					//	oldV, err := os.Open(oldVPath)
-					//	if err != nil {
-					//		fmt.Println(err)
-					//		continue
-					//	}
-					//	defer oldV.Close()
-					//
-					//	newV, err := os.Create(newVPath)
-					//	if err != nil {
-					//		fmt.Println(err)
-					//		continue
-					//	}
-					//	defer newV.Close()
-					//
-					//	_, err = io.Copy(newV, oldV)
-					//	if err != nil {
-					//		fmt.Println(err)
-					//		continue
-					//	}
-					//	fmt.Println(oldVPath)
-					//}
+					isAffect := isAffected(versionDiff, tracer.GetTestCovMap()[testFile], util.TracerCovType)
+					//fmt.Println(exists, isAffect)
+					if exists && isAffect {
+
+						included[testFile] = true
+
+					}
 				}
+
 			}
 		}
 
 	}
 
 	endTime := time.Now()
-	fmt.Printf("[HyRTS] RTS included %d of %d test file using %dms\n", len(tracer.GetTestCovMap())-len(included), len(tracer.GetTestCovMap()), endTime.Sub(startTime).Milliseconds())
+	fmt.Printf("[HyRTS] RTS included %d of %d test file using %dms\n", len(included), len(tracer.GetTestCovMap()), endTime.Sub(startTime).Milliseconds())
 
+	//fmt.Println(included)
 	return included
 }
 
-func isAffected(versionDiff diff.VersionDiff, depsMap coverage.Deps, covType string) bool {
+func isAffected(versionDiff diff.VersionDiff, depsMap map[string]bool, covType string) bool {
 	// Deps(depsMap): /path:GetUserInfo
 	// CFs: path -> GetUserInfo
-	for key := range depsMap {
+	for key, _ := range depsMap {
+		parts := strings.Split(key, ":")
 
-		if _, exist := versionDiff.GetCFs()[key]; exist && versionDiff.GetCFs()[key] == key {
+		if val, exist := versionDiff.GetCFs()[parts[0]]; exist && (val == parts[1]) {
 			return true
 		}
-		if _, exist := versionDiff.GetAFs()[key]; exist && versionDiff.GetAFs()[key] == key {
+		if val, exist := versionDiff.GetAFs()[parts[0]]; exist && (val == parts[1]) {
 			return true
 		}
-		if _, exist := versionDiff.GetDFs()[key]; exist && versionDiff.GetDFs()[key] == key {
+		if val, exist := versionDiff.GetDFs()[parts[0]]; exist && (val == parts[1]) {
 			return true
 		}
 	}

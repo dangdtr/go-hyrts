@@ -17,5 +17,5 @@ type UserInterface interface {
 
 // UserInfo says Hello
 func UserInfo(user User) string {
-	return fmt.Sprintf("Name: %s, Age: %d", user.Name, user.Age)
+	return fmt.Sprintf("Name:%s, Age: %d", user.Name, user.Age)
 }
