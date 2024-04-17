@@ -82,7 +82,7 @@ func (t *cov) collectTestCov(rootDir string) {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
 
-				if strings.HasPrefix(d.Name.Name, util.TestPrefix) && d.Name.Name == "TestGetListEvent" {
+				if strings.HasPrefix(d.Name.Name, util.TestPrefix) {
 
 					ast.Inspect(d.Body, func(n ast.Node) bool {
 						// Check if the node is a function call expression
