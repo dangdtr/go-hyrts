@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/dangdtr/go-hyrts/internal/core/executor"
+	"github.com/dangdtr/go-hyrts/internal/core/rts/hybrid_rts"
 	"github.com/dangdtr/go-hyrts/internal/core/util"
 	"github.com/spf13/cobra"
 )
@@ -29,10 +30,10 @@ func initialize(cmd *cobra.Command, _ []string) {
 
 	//util.ProgramPath, _ = os.Getwd()
 	//util.ProgramPath = "/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example"
-	//include := hybrid_rts.Run()
+	include := hybrid_rts.Run()
 
-	include := make(map[string]bool)
-	include["/golang/usersegmentv2/pkg/segment/repo_test.go:TestGetListEvent"] = true
+	//include := make(map[string]bool)
+	//include["/golang/usersegmentv2/pkg/segment/repo_test.go:TestGetListEvent"] = true
 	//include["TestJoinStrings"] = true
 
 	executor.ExecShell(include)
