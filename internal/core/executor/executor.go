@@ -14,7 +14,9 @@ import (
 func ExecShell(include map[string]bool) {
 
 	for testFile := range include {
-		args := fmt.Sprintf("%s/%s", util.ProgramPath, testFile)
+		parts := strings.Split(testFile, ":")
+
+		args := fmt.Sprintf("%s%s", util.ProgramPath, parts[0])
 
 		lastIndex := strings.LastIndex(args, "/")
 		if lastIndex != -1 {
@@ -24,9 +26,10 @@ func ExecShell(include map[string]bool) {
 			"go",
 			"test",
 			"-v",
-			"-run",
-			"Test.*",
 			args,
+			//"-run",
+			"-testify.m",
+			fmt.Sprintf("^%s$", parts[1]),
 		)
 
 		//fmt.Println(testFile)
@@ -69,3 +72,7 @@ func formatTestFuncRun(list []string) string {
 	preFormat := strings.Join(list, "|")
 	return fmt.Sprintf("^(%s)$", preFormat)
 }
+
+// go test -v -run ^TestGetListEvent$ ./...
+// sudo go test -v /Users/dangdt/teko/footprint/golang/usersegmentv2/pkg/segment -testify.m TestGetListEvent
+// go test -test.run ^\QTestRepoTestSuite\E$/^\QTestGetListEvent\E$ -testify.m ^TestGetListEvent$

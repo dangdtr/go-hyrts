@@ -80,7 +80,7 @@ func (v *versionDiff) parseAndSerializeNewContents() {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), util.GoExt) && !strings.HasSuffix(info.Name(), util.GoTestExt) {
+		if !info.IsDir() && strings.HasSuffix(info.Name(), util.GoExt) && !strings.HasSuffix(info.Name(), util.GoTestExt) && !strings.HasSuffix(info.Name(), ".pb.go") {
 
 			content, err := ioutil.ReadFile(path)
 			if err != nil {

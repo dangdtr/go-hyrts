@@ -1,10 +1,10 @@
 package hyrts
 
 import (
-	"os"
+	"go/build"
+	"strings"
 
 	"github.com/dangdtr/go-hyrts/internal/core/executor"
-	"github.com/dangdtr/go-hyrts/internal/core/rts/hybrid_rts"
 	"github.com/dangdtr/go-hyrts/internal/core/util"
 	"github.com/spf13/cobra"
 )
@@ -27,13 +27,19 @@ func initialize(cmd *cobra.Command, _ []string) {
 	util.OldDir = "./diff_old"
 	util.NewDir = "./diff_new"
 
-	util.ProgramPath, _ = os.Getwd()
+	//util.ProgramPath, _ = os.Getwd()
 	//util.ProgramPath = "/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example"
-	include := hybrid_rts.Run()
+	//include := hybrid_rts.Run()
 
-	//include := make(map[string]bool)
-	//include["example/package1/file1_test.go"] = true
+	include := make(map[string]bool)
+	include["/golang/usersegmentv2/pkg/segment/repo_test.go:TestGetListEvent"] = true
 	//include["TestJoinStrings"] = true
 
 	executor.ExecShell(include)
+
+}
+
+func isStandardPackage(path string) bool {
+	p, _ := build.Import(path, "", build.FindOnly)
+	return p.Goroot && p.ImportPath != "" && !strings.Contains(p.ImportPath, ".")
 }

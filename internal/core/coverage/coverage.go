@@ -15,23 +15,23 @@ import (
 //type Deps map[string]bool
 
 type cov struct {
-	testCovMap   map[string]map[string]bool
+	testCovMap   map[string]map[string]string
 	newFileMeths map[string]map[string]string
 }
 
 type Cov interface {
 	Run()
-	GetTestCovMap() map[string]map[string]bool
+	GetTestCovMap() map[string]map[string]string
 }
 
 func NewCov(newFileMeths map[string]map[string]string) Cov {
 	return &cov{
-		testCovMap:   make(map[string]map[string]bool),
+		testCovMap:   make(map[string]map[string]string),
 		newFileMeths: newFileMeths,
 	}
 }
 
-func (t *cov) GetTestCovMap() map[string]map[string]bool {
+func (t *cov) GetTestCovMap() map[string]map[string]string {
 	return t.testCovMap
 }
 
@@ -75,14 +75,15 @@ func (t *cov) collectTestCov(rootDir string) {
 
 		//deps := make(Deps)
 		//covFunc := make(map[string]Deps)
-		deps := make(map[string]bool)
+		deps := make(map[string]string)
 
 		for _, decl := range node.Decls {
 
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
 
-				if strings.HasPrefix(d.Name.Name, util.TestPrefix) {
+				if strings.HasPrefix(d.Name.Name, util.TestPrefix) && d.Name.Name == "TestGetListEvent" {
+
 					ast.Inspect(d.Body, func(n ast.Node) bool {
 						// Check if the node is a function call expression
 						//fmt.Println(n)
@@ -98,11 +99,14 @@ func (t *cov) collectTestCov(rootDir string) {
 						case *ast.Ident:
 							funcName = fun.Name
 							pkgg := t.findPackage(imports, fun.Name)
-							if pkgg == "unknown" {
-								pkgg = node.Name.Name
+							if len(pkgg) == 0 {
+								pkgg = append(pkgg, path+node.Name.Name)
 							}
-							key := fmt.Sprintf("%s:%s", pkgg, funcName)
-							deps[key] = true
+
+							for _, p := range pkgg {
+								key := fmt.Sprintf("%s:%s", p, funcName)
+								deps[key] = d.Name.Name
+							}
 
 						case *ast.SelectorExpr:
 							if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
@@ -110,33 +114,37 @@ func (t *cov) collectTestCov(rootDir string) {
 								case *ast.Ident:
 									if _, ok := selExpr.X.(*ast.Ident); ok {
 										//fmt.Printf("Package: %s, Method: %s\n", ident.Name, selExpr.Sel.Name)
+										pkgAlias = selExpr.X.(*ast.Ident).Name
 										funcName = selExpr.Sel.Name
 
-										pkgg := t.findPackage(imports, funcName)
-										if pkgg == "unknown" {
-											pkgg = node.Name.Name
+										pkgg := t.findPackage(imports, pkgAlias)
+										if len(pkgg) == 0 {
+											pkgg = append(pkgg, node.Name.Name)
 										}
 
-										key := fmt.Sprintf("%s:%s", pkgg, funcName)
-
-										deps[key] = true
+										for _, p := range pkgg {
+											key := fmt.Sprintf("%s:%s", p, funcName)
+											deps[key] = d.Name.Name
+										}
 
 										//deps[fmt.Sprint(pkgg+":"+selExpr.Sel.Name)] = true
 
 									}
 								case *ast.SelectorExpr:
 									//if sel, ok := selExpr.X.(*ast.SelectorExpr); ok {
+									//pkgAlias = selExpr.X.(*ast.SelectorExpr).Name
+
 									funcName = selExpr.Sel.Name
 
-									pkgg := t.findPackage(imports, selExpr.Sel.Name)
-
-									if pkgg == "unknown" {
-										pkgg = node.Name.Name
+									pkgg := t.findPackage(imports, funcName)
+									if len(pkgg) == 0 {
+										pkgg = append(pkgg, node.Name.Name)
 									}
 
-									key := fmt.Sprintf("%s:%s", pkgg, funcName)
-
-									deps[key] = true
+									for _, p := range pkgg {
+										key := fmt.Sprintf("%s:%s", p, funcName)
+										deps[key] = d.Name.Name
+									}
 
 									//fmt.Printf("Package: %s, Method: %s\n", sel.Name, selExpr.Sel.Name)
 									//}
@@ -359,17 +367,19 @@ func (t *cov) collectDepsCov(filePath string) map[string]bool {
 	return nil
 }
 
-func (t *cov) findPackage(imports map[string]string, funcName string) string {
+func (t *cov) findPackage(imports map[string]string, funcName string) []string {
+	rs := make([]string, 0)
 	for name, path := range imports {
 		if name == funcName {
-			return path
+			rs = append(rs, path)
 		}
 	}
 
 	for key, fnMap := range t.newFileMeths {
 		if _, ok := fnMap[funcName]; ok {
-			return key
+			rs = append(rs, key)
 		}
 	}
-	return "unknown"
+
+	return rs
 }

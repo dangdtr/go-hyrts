@@ -1,20 +1,19 @@
 package util
 
 import (
-	"os"
 	"strings"
 )
 
 var (
-	ProgramPath = "/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example"
-	//ProgramPath = "/Users/dangdt/teko/footprint"
+	//ProgramPath = "/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example"
+	ProgramPath = "/Users/dangdt/teko/footprint"
 
 	TestPrefix = "Test"
 	GoExt      = ".go"
 	GoTestExt  = "test.go"
 
-	OldDir, _ = os.Getwd()
-	NewDir    = ""
+	OldDir = ProgramPath
+	NewDir = ""
 
 	TracerCovType = "meth-cov"
 )

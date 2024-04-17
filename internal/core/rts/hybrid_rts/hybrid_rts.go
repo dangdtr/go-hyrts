@@ -37,11 +37,11 @@ func Run() map[string]bool {
 					exists := versionDiff.GetChangedFiles()[parts[0]]
 					//fmt.Println(exists)
 
-					isAffect := isAffected(versionDiff, tracer.GetTestCovMap()[testFile], util.TracerCovType)
+					isAffect, testFunc := isAffected(versionDiff, tracer.GetTestCovMap()[testFile], util.TracerCovType)
 					//fmt.Println(exists, isAffect)
 					if exists && isAffect {
 
-						included[testFile] = true
+						included[testFile+":"+testFunc] = true
 
 					}
 				}
@@ -54,25 +54,26 @@ func Run() map[string]bool {
 	endTime := time.Now()
 	fmt.Printf("[HyRTS] RTS included %d of %d test file using %dms\n", len(included), len(tracer.GetTestCovMap()), endTime.Sub(startTime).Milliseconds())
 
+	fmt.Println()
 	//fmt.Println(included)
 	return included
 }
 
-func isAffected(versionDiff diff.VersionDiff, depsMap map[string]bool, covType string) bool {
+func isAffected(versionDiff diff.VersionDiff, depsMap map[string]string, covType string) (bool, string) {
 	// Deps(depsMap): /path:GetUserInfo
 	// CFs: path -> GetUserInfo
-	for key, _ := range depsMap {
+	for key, valDeps := range depsMap {
 		parts := strings.Split(key, ":")
 
 		if val, exist := versionDiff.GetCFs()[parts[0]]; exist && (val == parts[1]) {
-			return true
+			return true, valDeps
 		}
 		if val, exist := versionDiff.GetAFs()[parts[0]]; exist && (val == parts[1]) {
-			return true
+			return true, valDeps
 		}
 		if val, exist := versionDiff.GetDFs()[parts[0]]; exist && (val == parts[1]) {
-			return true
+			return true, valDeps
 		}
 	}
-	return false
+	return false, ""
 }
