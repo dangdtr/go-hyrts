@@ -10,14 +10,14 @@ func (v *versionDiff) atomicLevelDiff(fileName string) {
 
 	for method, checksum := range oldMethMap {
 		if _, containsKey := newMethMap[method]; !containsKey {
-			v.DFs[fileName] = method
+			v.DFs[fileName+":"+method] = method
 		} else if newMethMap[method] != checksum {
-			v.CFs[fileName] = method
+			v.CFs[fileName+":"+method] = method
 		}
 		delete(newMethMap, method)
 	}
 	for method := range newMethMap {
-		v.AFs[fileName] = method
+		v.AFs[fileName+":"+method] = method
 	}
 
 }

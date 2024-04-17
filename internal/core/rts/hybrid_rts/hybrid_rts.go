@@ -65,13 +65,13 @@ func isAffected(versionDiff diff.VersionDiff, depsMap map[string]string, covType
 	for key, valDeps := range depsMap {
 		parts := strings.Split(key, ":")
 
-		if val, exist := versionDiff.GetCFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetCFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
-		if val, exist := versionDiff.GetAFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetAFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
-		if val, exist := versionDiff.GetDFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetDFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
 	}
