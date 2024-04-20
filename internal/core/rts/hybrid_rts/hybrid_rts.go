@@ -5,47 +5,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dangdtr/go-hyrts/internal/core/coverage"
+	"github.com/dangdtr/go-hyrts/internal/core/collect"
 	"github.com/dangdtr/go-hyrts/internal/core/diff"
 	"github.com/dangdtr/go-hyrts/internal/core/util"
 )
 
 func Run() map[string]bool {
+	startTime := time.Now()
+
 	versionDiff := diff.NewVersionDiff()
 	versionDiff.Run()
 
-	tracer := coverage.NewCov(versionDiff.GetNewFileMeths())
+	tracer := collect.NewCov(versionDiff.GetNewFileMeths())
 	tracer.Run()
-
-	startTime := time.Now()
 
 	included := make(map[string]bool)
 
 	if util.OldDir == "" {
-		fmt.Println("[HyRTS] No RTS analysis due to no old coverage, but is computing coverage info and checksum info for future RTS...")
+		fmt.Println("[HyRTS] No RTS analysis due to no old collect, but is computing collect info and checksum info for future RTS...")
 		return included
 	} else {
 		if len(tracer.GetTestCovMap()) == 0 {
 			return included
 		} else {
 			for testFile, testDeps := range tracer.GetTestCovMap() {
-				//testPath := filepath.Join(Properties_OLD_DIR, test)
 
-				for fileDep, _ := range testDeps {
-					parts := strings.Split(fileDep, ":")
-
-					exists := versionDiff.GetChangedFiles()[parts[0]]
-					//fmt.Println(exists)
-
-					isAffect, testFunc := isAffected(versionDiff, tracer.GetTestCovMap()[testFile], util.TracerCovType)
-					//fmt.Println(exists, isAffect)
-					if exists && isAffect {
-
-						included[testFile+":"+testFunc] = true
-
-					}
+				isAffect, testFunc := isAffectedByChange(versionDiff, testDeps, util.TracerCovType)
+				if /*exists &&*/ isAffect {
+					included[testFile+":"+testFunc] = true
 				}
-
 			}
 		}
 
@@ -65,14 +53,39 @@ func isAffected(versionDiff diff.VersionDiff, depsMap map[string]string, covType
 	for key, valDeps := range depsMap {
 		parts := strings.Split(key, ":")
 
-		if val, exist := versionDiff.GetCFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetCFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
-		if val, exist := versionDiff.GetAFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetAFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
-		if val, exist := versionDiff.GetDFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetDFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
+		}
+	}
+	return false, ""
+}
+
+func isAffectedByChange(versionDiff diff.VersionDiff, depsMap map[string]string, covType string) (bool, string) {
+	// Deps(depsMap): /path:GetUserInfo
+	// CFs: path -> GetUserInfo
+	for key, valDeps := range depsMap {
+		parts := strings.Split(key, ":")
+		for _, v := range versionDiff.GetCFs() {
+			if parts[1] == v {
+				return true, valDeps
+			}
+		}
+		for _, v := range versionDiff.GetAFs() {
+			if parts[1] == v {
+				return true, valDeps
+			}
+		}
+
+		for _, v := range versionDiff.GetDFs() {
+			if parts[1] == v {
+				return true, valDeps
+			}
 		}
 	}
 	return false, ""
