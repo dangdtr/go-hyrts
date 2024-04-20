@@ -2,27 +2,28 @@ package hybrid_rts
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/dangdtr/go-hyrts/internal/core/coverage"
+	"github.com/dangdtr/go-hyrts/internal/core/collect"
 	"github.com/dangdtr/go-hyrts/internal/core/diff"
 	"github.com/dangdtr/go-hyrts/internal/core/util"
 )
 
 func Run() map[string]bool {
+	startTime := time.Now()
+
 	versionDiff := diff.NewVersionDiff()
 	versionDiff.Run()
 
-	tracer := coverage.NewCov(versionDiff.GetNewFileMeths())
+	tracer := collect.NewCov(versionDiff.GetNewFileMeths())
 	tracer.Run()
-
-	startTime := time.Now()
 
 	included := make(map[string]bool)
 
 	if util.OldDir == "" {
-		fmt.Println("[HyRTS] No RTS analysis due to no old coverage, but is computing coverage info and checksum info for future RTS...")
+		fmt.Println("[HyRTS] No RTS analysis due to no old collect, but is computing collect info and checksum info for future RTS...")
 		return included
 	} else {
 		if len(tracer.GetTestCovMap()) == 0 {
@@ -65,15 +66,23 @@ func isAffected(versionDiff diff.VersionDiff, depsMap map[string]string, covType
 	for key, valDeps := range depsMap {
 		parts := strings.Split(key, ":")
 
-		if val, exist := versionDiff.GetCFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetCFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
-		if val, exist := versionDiff.GetAFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetAFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
-		if val, exist := versionDiff.GetDFs()[parts[0]]; exist && (val == parts[1]) {
+		if val, exist := versionDiff.GetDFs()[key]; exist && (val == parts[1]) {
 			return true, valDeps
 		}
 	}
 	return false, ""
+}
+
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }

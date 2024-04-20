@@ -1,4 +1,4 @@
-package coverage
+package collect
 
 import (
 	"fmt"
@@ -73,6 +73,8 @@ func (t *cov) collectTestCov(rootDir string) {
 			imports[name] = path
 		}
 
+		//fmt.Println(shortPath)
+
 		//deps := make(Deps)
 		//covFunc := make(map[string]Deps)
 		deps := make(map[string]string)
@@ -82,7 +84,7 @@ func (t *cov) collectTestCov(rootDir string) {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
 
-				if strings.HasPrefix(d.Name.Name, util.TestPrefix) && d.Name.Name == "TestGetListEvent" {
+				if strings.HasPrefix(d.Name.Name, util.TestPrefix) {
 
 					ast.Inspect(d.Body, func(n ast.Node) bool {
 						// Check if the node is a function call expression

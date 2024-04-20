@@ -6,7 +6,8 @@ import (
 
 var (
 	//ProgramPath = "/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example"
-	ProgramPath = "/Users/dangdt/teko/footprint"
+	ProgramPath = ""
+	//ProgramPath = "/Users/dangdt/teko/footprint"
 
 	TestPrefix = "Test"
 	GoExt      = ".go"
