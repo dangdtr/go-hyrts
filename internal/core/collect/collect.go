@@ -1,4 +1,4 @@
-package coverage
+package collect
 
 import (
 	"fmt"
@@ -63,15 +63,17 @@ func (t *cov) collectTestCov(rootDir string) {
 		// Map to store imported packages
 		imports := make(map[string]string)
 		for _, imp := range node.Imports {
-			path := strings.Trim(imp.Path.Value, `"`)
+			path_t := strings.Trim(imp.Path.Value, `"`)
 			name := ""
 			if imp.Name != nil {
 				name = imp.Name.Name
 			} else {
-				name = path[strings.LastIndex(path, "/")+1:]
+				name = path_t[strings.LastIndex(path_t, "/")+1:]
 			}
-			imports[name] = path
+			imports[name] = path_t
 		}
+
+		//fmt.Println(shortPath)
 
 		//deps := make(Deps)
 		//covFunc := make(map[string]Deps)
@@ -82,7 +84,7 @@ func (t *cov) collectTestCov(rootDir string) {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
 
-				if strings.HasPrefix(d.Name.Name, util.TestPrefix) && d.Name.Name == "TestGetListEvent" {
+				if strings.HasPrefix(d.Name.Name, util.TestPrefix) || strings.HasPrefix(d.Name.Name, "test") {
 
 					ast.Inspect(d.Body, func(n ast.Node) bool {
 						// Check if the node is a function call expression
@@ -100,11 +102,14 @@ func (t *cov) collectTestCov(rootDir string) {
 							funcName = fun.Name
 							pkgg := t.findPackage(imports, fun.Name)
 							if len(pkgg) == 0 {
-								pkgg = append(pkgg, path+node.Name.Name)
+								pkgg = append(pkgg, node.Name.Name)
 							}
 
 							for _, p := range pkgg {
-								key := fmt.Sprintf("%s:%s", p, funcName)
+								if util.StandardLibraries[p] {
+									continue
+								}
+								key := fmt.Sprintf("%s:%s:%d", p, funcName, fs.Position(fun.NamePos).Line)
 								deps[key] = d.Name.Name
 							}
 
@@ -123,7 +128,10 @@ func (t *cov) collectTestCov(rootDir string) {
 										}
 
 										for _, p := range pkgg {
-											key := fmt.Sprintf("%s:%s", p, funcName)
+											if util.StandardLibraries[p] {
+												continue
+											}
+											key := fmt.Sprintf("%s:%s:%d", p, funcName, fs.Position(selExpr.Sel.NamePos).Line)
 											deps[key] = d.Name.Name
 										}
 
@@ -142,7 +150,10 @@ func (t *cov) collectTestCov(rootDir string) {
 									}
 
 									for _, p := range pkgg {
-										key := fmt.Sprintf("%s:%s", p, funcName)
+										if util.StandardLibraries[p] {
+											continue
+										}
+										key := fmt.Sprintf("%s:%s:%d", p, funcName, fs.Position(selExpr.Sel.NamePos).Line)
 										deps[key] = d.Name.Name
 									}
 
