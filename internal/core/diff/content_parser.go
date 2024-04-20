@@ -19,6 +19,12 @@ func (v *versionDiff) deserializeOldContents() {
 	filePath := util.ProgramPath + "/HyRTS-checksum.txt"
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
+		util.OldDir = ""
+
+		return
+	}
+	if data == nil {
+		util.OldDir = ""
 		return
 	}
 
@@ -50,6 +56,7 @@ func (v *versionDiff) deserializeOldContents() {
 		v.oldFileMeths[fileChecksumParts[0]] = methodMap
 
 	}
+
 }
 
 func (v *versionDiff) serializeNewContents() {
@@ -80,7 +87,7 @@ func (v *versionDiff) parseAndSerializeNewContents() {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), util.GoExt) && !strings.HasSuffix(info.Name(), util.GoTestExt) && !strings.HasSuffix(info.Name(), ".pb.go") {
+		if !info.IsDir() && strings.HasSuffix(info.Name(), util.GoExt) && !strings.HasPrefix(util.ShortPath(path), "/vendor") /*&& !strings.HasSuffix(info.Name(), util.GoTestExt)*/ && !strings.HasSuffix(info.Name(), ".pb.go") {
 
 			content, err := ioutil.ReadFile(path)
 			if err != nil {
