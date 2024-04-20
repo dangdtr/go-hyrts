@@ -1,7 +1,9 @@
 package hyrts
 
 import (
+	"fmt"
 	"go/build"
+	"os"
 	"strings"
 
 	"github.com/dangdtr/go-hyrts/internal/core/executor"
@@ -25,16 +27,12 @@ func NewCmdHyRTS() *cobra.Command {
 }
 
 func initialize(cmd *cobra.Command, _ []string) {
+	fmt.Println("[go-hyrts] is running...")
 	util.OldDir = "./diff_old"
 	util.NewDir = "./diff_new"
 
-	//util.ProgramPath, _ = os.Getwd()
-	//util.ProgramPath = "/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example"
+	util.ProgramPath, _ = os.Getwd()
 	include := hybrid_rts.Run()
-
-	//include := make(map[string]bool)
-	//include["/golang/usersegmentv2/pkg/segment/repo_test.go:TestGetListEvent"] = true
-	//include["TestJoinStrings"] = true
 
 	executor.ExecShell(include)
 

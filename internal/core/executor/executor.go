@@ -13,6 +13,17 @@ import (
 
 func ExecShell(include map[string]bool) {
 
+	if len(include) == 0 && util.OldDir == "" {
+		cmd := exec.Command(
+			"go",
+			"test",
+			fmt.Sprint(util.ProgramPath, "/..."),
+		)
+		fmt.Println(cmd.String())
+		output, _ := cmd.CombinedOutput()
+		fmt.Println(string(output))
+		return
+	}
 	for testFile := range include {
 		parts := strings.Split(testFile, ":")
 
@@ -27,8 +38,8 @@ func ExecShell(include map[string]bool) {
 			"test",
 			"-v",
 			args,
-			//"-run",
-			"-testify.m",
+			"-run",
+			//"-testify.m",
 			fmt.Sprintf("^%s$", parts[1]),
 		)
 
