@@ -9,7 +9,10 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
+	github.com/cihangir/goparser v0.0.0-20131118072213-5a29df6d1dc2 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/gardenbed/charm v0.1.3 // indirect
+	github.com/gardenbed/go-parser v0.1.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -27,12 +30,12 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221212164502-fae10dda9338 // indirect
-	golang.org/x/mod v0.16.0 // indirect
-	golang.org/x/sync v0.6.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/telemetry v0.0.0-20240228155512-f48c80bd79b2 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/tools v0.19.1-0.20240308170711-c1789339c5a6 // indirect
+	golang.org/x/tools v0.21.0 // indirect
 	golang.org/x/tools/cmd/guru v0.1.1-deprecated // indirect
 	golang.org/x/tools/go/pointer v0.1.0-deprecated // indirect
 	golang.org/x/tools/gopls v0.15.3 // indirect
