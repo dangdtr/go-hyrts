@@ -2,9 +2,6 @@ package executor
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os/exec"
 	"strings"
 
@@ -13,6 +10,17 @@ import (
 
 func ExecShell(include map[string]bool) {
 
+	if len(include) == 0 && util.OldDir == "" {
+		cmd := exec.Command(
+			"go",
+			"test",
+			fmt.Sprint(util.ProgramPath, "/..."),
+		)
+		fmt.Println(cmd.String())
+		output, _ := cmd.CombinedOutput()
+		fmt.Println(string(output))
+		return
+	}
 	for testFile := range include {
 		parts := strings.Split(testFile, ":")
 
@@ -27,8 +35,8 @@ func ExecShell(include map[string]bool) {
 			"test",
 			"-v",
 			args,
-			//"-run",
-			"-testify.m",
+			"-run",
+			//"-testify.m",
 			fmt.Sprintf("^%s$", parts[1]),
 		)
 
@@ -48,31 +56,3 @@ func ExecShell(include map[string]bool) {
 
 	}
 }
-
-func findTestFuncInTestFile(testPath string) []string {
-	list := make([]string, 0)
-	fs := token.NewFileSet()
-	node, err := parser.ParseFile(fs, testPath, nil, parser.AllErrors)
-	if err != nil {
-		return nil
-	}
-	for _, decl := range node.Decls {
-
-		switch d := decl.(type) {
-		case *ast.FuncDecl:
-			if strings.HasPrefix(d.Name.Name, util.TestPrefix) {
-				list = append(list, d.Name.Name)
-			}
-		}
-	}
-	return list
-}
-
-func formatTestFuncRun(list []string) string {
-	preFormat := strings.Join(list, "|")
-	return fmt.Sprintf("^(%s)$", preFormat)
-}
-
-// go test -v -run ^TestGetListEvent$ ./...
-// sudo go test -v /Users/dangdt/teko/footprint/golang/usersegmentv2/pkg/segment -testify.m TestGetListEvent
-// go test -test.run ^\QTestRepoTestSuite\E$/^\QTestGetListEvent\E$ -testify.m ^TestGetListEvent$

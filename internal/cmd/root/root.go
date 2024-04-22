@@ -23,9 +23,10 @@ func init() {
 // NewCmdRoot is a root command.
 func NewCmdRoot() *cobra.Command {
 	cmd := cobra.Command{
-		Use:   "go-hyrts <command> <subcommand>",
-		Short: "Interactive go-hyrts CLI",
-		Long:  "Interactive go-hyrts command line.",
+		Use:     "go-hyrts <command> <subcommand>",
+		Version: "go-hyrts 1.2.8",
+		Short:   "Interactive go-hyrts CLI",
+		Long:    "Interactive go-hyrts command line.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},

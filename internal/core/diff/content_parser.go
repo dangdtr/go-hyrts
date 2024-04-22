@@ -19,6 +19,8 @@ func (v *versionDiff) deserializeOldContents() {
 	filePath := util.ProgramPath + "/HyRTS-checksum.txt"
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
+		util.OldDir = ""
+
 		return
 	}
 
@@ -50,6 +52,7 @@ func (v *versionDiff) deserializeOldContents() {
 		v.oldFileMeths[fileChecksumParts[0]] = methodMap
 
 	}
+
 }
 
 func (v *versionDiff) serializeNewContents() {
@@ -75,41 +78,32 @@ func (v *versionDiff) serializeNewContents() {
 }
 
 func (v *versionDiff) parseAndSerializeNewContents() {
-
 	err := filepath.Walk(util.ProgramPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), util.GoExt) && !strings.HasSuffix(info.Name(), util.GoTestExt) && !strings.HasSuffix(info.Name(), ".pb.go") {
 
+		if !info.IsDir() && strings.HasSuffix(info.Name(), util.GoExt) && !strings.HasPrefix(util.ShortPath(path), "/vendor") && !strings.HasSuffix(info.Name(), ".pb.go") {
 			content, err := ioutil.ReadFile(path)
 			if err != nil {
 				return err
 			}
 
 			fileChecksum := checksum.Calculate(content)
-
 			meths, err := v.extractFileInfo(path)
 			if err != nil {
 				return err
 			}
-
-			//shortPath := strings.TrimSuffix(path, "/Users/dangdt/teko/footprint/")
 			shortPath := util.ShortPath(path)
-
 			v.newFiles[shortPath] = fileChecksum
 			v.newFileMeths[shortPath] = meths
-
 		}
 		return nil
 	})
-
 	if err != nil {
 		fmt.Println("Error walking directory:", err)
 	}
-
 	v.serializeNewContents()
-
 }
 
 func (v *versionDiff) extractFileInfo(filePath string) (map[string]string, error) {
