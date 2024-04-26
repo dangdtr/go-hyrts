@@ -2,6 +2,7 @@ package hyrts
 
 import (
 	"go/build"
+	"os"
 	"strings"
 
 	"github.com/dangdtr/go-hyrts/internal/core/executor"
@@ -28,7 +29,7 @@ func initialize(cmd *cobra.Command, _ []string) {
 	util.OldDir = "./diff_old"
 	util.NewDir = "./diff_new"
 
-	//util.ProgramPath, _ = os.Getwd()
+	util.ProgramPath, _ = os.Getwd()
 	//util.ProgramPath = "/Users/dangdt/Documents/coding/go-hyrts/go-hyrts/example"
 	include := hybrid_rts.Run()
 
