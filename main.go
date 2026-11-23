@@ -1,16 +1,12 @@
+// Command hyrts is a hybrid regression test selection tool for Go modules.
 package main
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/dangdtr/go-hyrts/internal/cmd/root"
+	"github.com/dangdtr/go-hyrts/internal/cli"
 )
 
 func main() {
-	rootCmd := root.NewCmdRoot()
-	if _, err := rootCmd.ExecuteC(); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
-		os.Exit(1)
-	}
+	os.Exit(cli.Main(os.Args[1:], os.Stdout, os.Stderr))
 }
