@@ -23,7 +23,6 @@ import (
 	"github.com/dangdtr/go-hyrts/internal/gotool"
 	"github.com/dangdtr/go-hyrts/internal/runner"
 	"github.com/dangdtr/go-hyrts/internal/selector"
-	"github.com/dangdtr/go-hyrts/internal/snapshot"
 )
 
 const usage = `hyrts: hybrid regression test selection for Go
@@ -40,7 +39,11 @@ common flags:
   -tags list  build tags, as for go test
 
 collect flags:
-  -j n        packages collected in parallel (default GOMAXPROCS/2)
+  -update     re-collect only the tests affected since the last collect
+              (falls back to a full collect when there is nothing to update)
+  -j n        test processes at once, across packages (default GOMAXPROCS)
+  -p n        test processes at once within one package (default 1: tests of
+              a package often share fixtures; raise it if they are isolated)
   -timeout d  per-test timeout (default 10m)
   -pkg list   comma-separated import paths to collect (default all)
 
@@ -49,6 +52,7 @@ select/run flags:
   -json       print the selection as JSON (select only)
   -always re  always select tests whose "importpath.Name" matches re
   -n          print the go test command without running it (run only)
+  -update     after running, re-collect the selected tests (run only)
 `
 
 type common struct {
@@ -102,13 +106,30 @@ func Main(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
+type collectFlags struct {
+	jobs, perPkg int
+	timeout      time.Duration
+}
+
+func (f *collectFlags) register(fs *flag.FlagSet) {
+	fs.IntVar(&f.jobs, "j", runtime.GOMAXPROCS(0), "")
+	fs.IntVar(&f.perPkg, "p", 1, "")
+	fs.DurationVar(&f.timeout, "timeout", 10*time.Minute, "")
+}
+
+func (f *collectFlags) options(root, tags string, log io.Writer) collect.Options {
+	return collect.Options{Root: root, Tags: tags, Jobs: f.jobs, PerPkg: f.perPkg,
+		Builds: max(1, runtime.GOMAXPROCS(0)/2), Timeout: f.timeout, Log: log}
+}
+
 func cmdCollect(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("collect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var c common
+	var cf collectFlags
 	c.register(fs)
-	jobs := fs.Int("j", max(1, runtime.GOMAXPROCS(0)/2), "")
-	timeout := fs.Duration("timeout", 10*time.Minute, "")
+	cf.register(fs)
+	update := fs.Bool("update", false, "")
 	pkgList := fs.String("pkg", "", "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -119,12 +140,29 @@ func cmdCollect(args []string, stdout, stderr io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	var pkgs []string
+	o := cf.options(root, c.tags, stderr)
 	if *pkgList != "" {
-		pkgs = strings.Split(*pkgList, ",")
+		o.Packages = strings.Split(*pkgList, ",")
 	}
 	start := time.Now()
-	d, err := collect.Run(ctx, collect.Options{Root: root, Tags: c.tags, Jobs: *jobs, Timeout: *timeout, Packages: pkgs, Log: stderr})
+	if *update {
+		old, r, err := selectTests(root, dbPath, c.tags, "")
+		if err == nil && !r.All {
+			n, err := incremental(ctx, o, dbPath, old, r)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "hyrts: updated %d of %d tests in %s -> %s\n", n, len(r.Tests), time.Since(start).Round(time.Second), dbPath)
+			return nil
+		}
+		if err == nil {
+			fmt.Fprintf(stderr, "hyrts: full collect needed: %s\n", r.AllReason)
+		}
+	}
+	if old, err := db.Load(dbPath); err == nil {
+		o.Prior = prior(old)
+	}
+	d, err := collect.Run(ctx, o)
 	if err != nil {
 		return err
 	}
@@ -138,6 +176,43 @@ func cmdCollect(args []string, stdout, stderr io.Writer) error {
 	fmt.Fprintf(stdout, "hyrts: collected %d tests (%d pass, %d fail, %d skip) in %s -> %s\n",
 		len(d.Tests), counts["pass"], counts["fail"], counts["skip"], time.Since(start).Round(time.Second), dbPath)
 	return nil
+}
+
+// incremental re-collects the tests selected in r and merges them into old.
+// Tests that were not selected keep their records: nothing they depend on
+// changed, so their dependencies hold for the new snapshot too.
+func incremental(ctx context.Context, o collect.Options, dbPath string, old *db.DB, r *selector.Result) (int, error) {
+	o.Only = map[string]map[string]bool{}
+	n := 0
+	for id, t := range r.Tests {
+		if r.Selected[id] == nil {
+			continue
+		}
+		if o.Only[t.Pkg] == nil {
+			o.Only[t.Pkg] = map[string]bool{}
+		}
+		o.Only[t.Pkg][t.Name] = true
+		n++
+	}
+	o.Prior = prior(old)
+	fresh, err := collect.Run(ctx, o)
+	if err != nil {
+		return 0, err
+	}
+	keep := make(map[string]bool, len(r.Tests))
+	for id := range r.Tests {
+		keep[id] = true
+	}
+	return n, db.Merge(old, fresh, keep).Save(dbPath)
+}
+
+// prior sums collected seconds per package, to schedule slow packages first.
+func prior(d *db.DB) map[string]float64 {
+	out := map[string]float64{}
+	for _, t := range d.Tests {
+		out[t.Pkg] += t.Seconds
+	}
+	return out
 }
 
 func cmdSelect(args []string, stdout, stderr io.Writer, run bool) error {
@@ -156,6 +231,9 @@ func cmdSelect(args []string, stdout, stderr io.Writer, run bool) error {
 	fs.SetOutput(stderr)
 	var c common
 	c.register(fs)
+	var cf collectFlags
+	cf.register(fs)
+	update := fs.Bool("update", false, "")
 	explain := fs.Bool("explain", false, "")
 	asJSON := fs.Bool("json", false, "")
 	always := fs.String("always", "", "")
@@ -169,7 +247,7 @@ func cmdSelect(args []string, stdout, stderr io.Writer, run bool) error {
 		return err
 	}
 	start := time.Now()
-	r, err := selectTests(root, dbPath, c.tags, *always)
+	old, r, err := selectTests(root, dbPath, c.tags, *always)
 	if err != nil {
 		return err
 	}
@@ -191,6 +269,10 @@ func cmdSelect(args []string, stdout, stderr io.Writer, run bool) error {
 	gargs := runner.Args(r, goFlags)
 	if gargs == nil {
 		fmt.Fprintln(stdout, "hyrts: no test is affected; nothing to run")
+		if *update {
+			_, err := incremental(context.Background(), cf.options(root, c.tags, stderr), dbPath, old, r)
+			return err
+		}
 		return nil
 	}
 	fmt.Fprintln(stderr, "hyrts: go", shellJoin(gargs))
@@ -199,29 +281,45 @@ func cmdSelect(args []string, stdout, stderr io.Writer, run bool) error {
 	}
 	cmd := exec.Command("go", gargs...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr, cmd.Stdin = root, stdout, stderr, os.Stdin
-	return cmd.Run()
+	runErr := cmd.Run()
+	if *update {
+		// Like HyRTS's offline mode: results first, dependencies afterwards.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		ustart := time.Now()
+		o := cf.options(root, c.tags, stderr)
+		if r.All {
+			d, err := collect.Run(ctx, o)
+			if err == nil {
+				err = d.Save(dbPath)
+			}
+			if err != nil {
+				return err
+			}
+		} else if _, err := incremental(ctx, o, dbPath, old, r); err != nil {
+			return err
+		}
+		fmt.Fprintf(stderr, "hyrts: dependencies updated in %s\n", time.Since(ustart).Round(time.Second))
+	}
+	return runErr
 }
 
-func selectTests(root, dbPath, tags, always string) (*selector.Result, error) {
+func selectTests(root, dbPath, tags, always string) (*db.DB, *selector.Result, error) {
 	old, err := db.Load(dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("%v (run `hyrts collect` first)", err)
+		return nil, nil, fmt.Errorf("%v (run `hyrts collect` first)", err)
 	}
-	g, err := gotool.Load(root, tags)
+	g, cur, err := collect.Load(root, tags)
 	if err != nil {
-		return nil, err
-	}
-	cur, err := snapshot.Take(root, g.DirPkg)
-	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	o := selector.Options{Tags: tags}
 	if always != "" {
 		if o.Always, err = regexp.Compile(always); err != nil {
-			return nil, fmt.Errorf("-always: %v", err)
+			return nil, nil, fmt.Errorf("-always: %v", err)
 		}
 	}
-	return selector.Select(old, g, cur, gotool.Version(root), o), nil
+	return old, selector.Select(old, g, cur, gotool.Version(root), o), nil
 }
 
 func report(w io.Writer, r *selector.Result, explain bool, took time.Duration) {

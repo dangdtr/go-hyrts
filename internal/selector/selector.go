@@ -203,8 +203,9 @@ func (s *sel) linkers(pkg, reason string) {
 
 type entry struct {
 	hash, rel, key string
-	test           bool // declared in a _test.go file
-	entry          bool // a test entry point
+	id             string // snapshot.FuncID
+	test           bool   // declared in a _test.go file
+	entry          bool   // a test entry point
 	method         string
 	effect         bool
 	types          []string
@@ -220,21 +221,17 @@ func decls(snap snapshot.Snapshot, pkg string) (funcs, others map[string]entry) 
 			continue
 		}
 		isTest := strings.HasSuffix(rel, "_test.go")
-		ns := path.Base(rel)
 		entries := map[string]bool{}
 		for _, t := range f.Tests {
 			entries[t] = true
 		}
 		for k, h := range f.Funcs {
-			key := k
-			if strings.HasPrefix(k, "init#") {
-				key = ns + ":" + k
-			}
+			id := snapshot.FuncID(pkg, f.Name, rel, k)
 			recv := ""
 			if i := strings.Index(k, "."); i > 0 {
 				recv = k[:i]
 			}
-			funcs[f.Name+"|"+key] = entry{hash: h, rel: rel, key: k, test: isTest, entry: entries[k], method: recv}
+			funcs[id] = entry{hash: h, rel: rel, key: k, id: id, test: isTest, entry: entries[k], method: recv}
 		}
 		for k, d := range f.Decls {
 			others[f.Name+"|"+k] = entry{hash: d.Hash, rel: rel, key: k, test: isTest, effect: d.Effect, types: d.Types}
@@ -298,7 +295,7 @@ func (s *sel) goPackage(pkg string) {
 		case o.test:
 			s.pkgTests(pkg, "test helper "+reason)
 		default:
-			for _, id := range s.byFunc[o.rel+"#"+o.key] {
+			for _, id := range s.byFunc[o.id] {
 				s.pick(id, "executes "+reason)
 			}
 		}

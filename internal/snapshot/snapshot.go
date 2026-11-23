@@ -10,7 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/dangdtr/go-hyrts/internal/astinfo"
 )
@@ -37,47 +40,92 @@ func Skip(rel string) bool {
 }
 
 // Take records every file under root: tracked and untracked-but-not-ignored
-// files when root is in a git work tree, every file otherwise.
-// dirPkg maps a relative directory to its package import path.
-func Take(root string, dirPkg map[string]string) (Snapshot, error) {
+// files when root is in a git work tree, every file otherwise. Files are read,
+// hashed and parsed by GOMAXPROCS goroutines. Package import paths are filled
+// in later by AssignPackages, so this can run alongside `go list`.
+func Take(root string) (Snapshot, error) {
 	files, err := list(root)
 	if err != nil {
 		return nil, err
 	}
-	snap := Snapshot{}
-	for _, rel := range files {
-		if Skip(rel) {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
-		if err != nil {
-			continue // deleted but still in the index, or unreadable
-		}
-		sum := sha256.Sum256(data)
-		f := &File{Hash: hex.EncodeToString(sum[:12])}
-		if strings.HasSuffix(rel, ".go") {
-			if a, err := astinfo.Parse(rel, data); err == nil {
-				f.AST = a
-				f.Package = dirPkg[pathDir(rel)]
-				f.Name = a.Package
-				f.Funcs = map[string]string{}
-				for k, fn := range a.Funcs {
-					f.Funcs[k] = fn.Hash
-					if fn.Test {
-						f.Tests = append(f.Tests, k)
-					}
-				}
-				f.Decls = a.Decls
+	recs := make([]*File, len(files))
+	next := make(chan int)
+	var wg sync.WaitGroup
+	for w := 0; w < runtime.GOMAXPROCS(0); w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range next {
+				recs[i] = record(root, files[i])
 			}
+		}()
+	}
+	for i, rel := range files {
+		if !Skip(rel) {
+			next <- i
 		}
-		snap[rel] = f
+	}
+	close(next)
+	wg.Wait()
+	snap := make(Snapshot, len(files))
+	for i, f := range recs {
+		if f != nil {
+			snap[files[i]] = f
+		}
 	}
 	return snap, nil
+}
+
+// record hashes one file and, for Go files, summarises its declarations.
+func record(root, rel string) *File {
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil // deleted but still in the index, or unreadable
+	}
+	sum := sha256.Sum256(data)
+	f := &File{Hash: hex.EncodeToString(sum[:12])}
+	if strings.HasSuffix(rel, ".go") {
+		if a, err := astinfo.Parse(rel, data); err == nil {
+			f.AST = a
+			f.Name = a.Package
+			f.Funcs = map[string]string{}
+			for k, fn := range a.Funcs {
+				f.Funcs[k] = fn.Hash
+				if fn.Test {
+					f.Tests = append(f.Tests, k)
+				}
+			}
+			sort.Strings(f.Tests)
+			f.Decls = a.Decls
+		}
+	}
+	return f
+}
+
+// AssignPackages records, for every Go file, the import path of the package
+// in its directory (dirPkg maps a relative directory to an import path).
+func (s Snapshot) AssignPackages(dirPkg map[string]string) {
+	for rel, f := range s {
+		if f.Funcs != nil {
+			f.Package = dirPkg[pathDir(rel)]
+		}
+	}
 }
 
 func pathDir(rel string) string {
 	d := filepath.ToSlash(filepath.Dir(rel))
 	return d
+}
+
+// FuncID identifies a function independently of the file it is in, so that
+// moving code between files of a package does not change identities:
+// "importpath#clause|Name" ("clause" is p or p_test). init functions, which
+// are anonymous and per file, keep the file name: "importpath#clause|x.go:init#0".
+func FuncID(pkg, clause, rel, key string) string {
+	if strings.HasPrefix(key, "init#") {
+		key = filepath.Base(rel) + ":" + key
+	}
+	return pkg + "#" + clause + "|" + key
 }
 
 // Dir returns the slash directory of a relative path ("." at the root).

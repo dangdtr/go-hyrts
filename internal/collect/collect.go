@@ -24,27 +24,35 @@ import (
 
 // Options configures a collection run.
 type Options struct {
-	Root     string
-	Tags     string
-	Jobs     int           // packages processed in parallel
-	Timeout  time.Duration // per test
-	Packages []string      // limit to these import paths (empty = all)
-	Log      io.Writer
+	Root    string
+	Tags    string
+	Jobs    int           // test processes running at once, across packages
+	PerPkg  int           // test processes of one package running at once (1 = serial)
+	Builds  int           // test binaries built at once
+	Timeout time.Duration // per test
+	// Packages limits collection to these import paths (empty = all).
+	Packages []string
+	// Only, when non-nil, limits collection to these tests (package -> names);
+	// the snapshot still covers the whole module.
+	Only map[string]map[string]bool
+	// Prior holds seconds per package from an earlier run; the slowest
+	// packages are built and started first so they do not finish last.
+	Prior map[string]float64
+	Log   io.Writer
 }
 
-// Run collects dependencies for every test in the module and returns the database.
+// Run collects dependencies for the selected tests of the module.
+//
+// It is a two-stage pipeline: Builds goroutines compile coverage-instrumented
+// test binaries, slowest package first, and hand each one over as soon as it
+// is ready; every package then runs its tests in their own processes, at most
+// PerPkg at a time per package and Jobs at a time overall.
 func Run(ctx context.Context, o Options) (*db.DB, error) {
-	if o.Jobs < 1 {
-		o.Jobs = 1
-	}
+	o.Jobs, o.PerPkg, o.Builds = max(1, o.Jobs), max(1, o.PerPkg), max(1, o.Builds)
 	if o.Log == nil {
 		o.Log = io.Discard
 	}
-	g, err := gotool.Load(o.Root, o.Tags)
-	if err != nil {
-		return nil, err
-	}
-	snap, err := snapshot.Take(o.Root, g.DirPkg)
+	g, snap, err := Load(o.Root, o.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -67,36 +75,105 @@ func Run(ctx context.Context, o Options) (*db.DB, error) {
 	}
 	defer os.RemoveAll(tmp)
 
-	var pkgs []string
+	pkgs := c.plan()
+	todo := make(chan string)
+	ready := make(chan built)
+	var builders sync.WaitGroup
+	for i := 0; i < o.Builds; i++ {
+		builders.Add(1)
+		go func() {
+			defer builders.Done()
+			for p := range todo {
+				if b, ok := c.build(ctx, tmp, p); ok {
+					ready <- b
+				}
+			}
+		}()
+	}
+	go func() {
+		defer close(todo)
+		for _, p := range pkgs {
+			select {
+			case todo <- p:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	go func() { builders.Wait(); close(ready) }()
+
+	slots := make(chan struct{}, o.Jobs) // global limit on test processes
+	var runners sync.WaitGroup
+	for b := range ready {
+		runners.Add(1)
+		go func(b built) {
+			defer runners.Done()
+			c.runPkg(ctx, tmp, b, slots)
+		}(b)
+	}
+	runners.Wait()
+	d.Funcs = c.funcs
+	return d, ctx.Err()
+}
+
+// Load lists the package graph and snapshots the module concurrently.
+func Load(root, tags string) (*gotool.Graph, snapshot.Snapshot, error) {
+	var (
+		g       *gotool.Graph
+		gErr    error
+		snap    snapshot.Snapshot
+		snapErr error
+		wg      sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() { defer wg.Done(); g, gErr = gotool.Load(root, tags) }()
+	go func() { defer wg.Done(); snap, snapErr = snapshot.Take(root) }()
+	wg.Wait()
+	if gErr != nil {
+		return nil, nil, gErr
+	}
+	if snapErr != nil {
+		return nil, nil, snapErr
+	}
+	snap.AssignPackages(g.DirPkg)
+	return g, snap, nil
+}
+
+// plan returns the packages to collect, slowest (by Prior) or largest first.
+func (c *collector) plan() []string {
 	want := map[string]bool{}
-	for _, p := range o.Packages {
+	for _, p := range c.o.Packages {
 		want[p] = true
 	}
-	for p := range g.TestDeps {
+	var pkgs []string
+	for p := range c.g.TestDeps {
+		if c.o.Only != nil && len(c.o.Only[p]) == 0 {
+			continue
+		}
 		if len(want) == 0 || want[p] {
 			pkgs = append(pkgs, p)
 		}
 	}
-	sort.Strings(pkgs)
+	weight := func(p string) float64 {
+		if s, ok := c.o.Prior[p]; ok {
+			return s
+		}
+		lp := c.g.Local[p]
+		return float64(len(lp.TestGoFiles) + len(lp.XTestGoFiles))
+	}
+	sort.Slice(pkgs, func(i, j int) bool {
+		wi, wj := weight(pkgs[i]), weight(pkgs[j])
+		if wi != wj {
+			return wi > wj
+		}
+		return pkgs[i] < pkgs[j]
+	})
+	return pkgs
+}
 
-	work := make(chan string)
-	var wg sync.WaitGroup
-	for i := 0; i < o.Jobs; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for p := range work {
-				c.pkg(ctx, tmp, p)
-			}
-		}()
-	}
-	for _, p := range pkgs {
-		work <- p
-	}
-	close(work)
-	wg.Wait()
-	d.Funcs = c.funcs
-	return d, ctx.Err()
+type built struct {
+	pkg, bin, dir string
+	names         []string
 }
 
 type span struct {
@@ -126,7 +203,7 @@ func (c *collector) buildSpans() {
 		key := f.Package + "/" + filepath.Base(rel)
 		for _, k := range f.AST.SortedFuncs() {
 			fn := f.AST.Funcs[k]
-			c.spans[key] = append(c.spans[key], span{fn.Start, fn.End, rel + "#" + k})
+			c.spans[key] = append(c.spans[key], span{fn.Start, fn.End, snapshot.FuncID(f.Package, f.Name, rel, k)})
 		}
 	}
 }
@@ -152,7 +229,8 @@ func (c *collector) add(t *db.Test) {
 	c.d.Tests[db.ID(t.Pkg, t.Name)] = t
 }
 
-func (c *collector) pkg(ctx context.Context, tmp, pkg string) {
+// build compiles the coverage-instrumented test binary of pkg and lists its tests.
+func (c *collector) build(ctx context.Context, tmp, pkg string) (built, bool) {
 	dir := c.g.Local[pkg].Dir
 	bin := filepath.Join(tmp, strings.NewReplacer("/", "_", ".", "_").Replace(pkg)+".test")
 	args := []string{"test", "-c", "-o", bin, "-cover", "-covermode=set", "-coverpkg=" + c.g.Module + "/..."}
@@ -161,29 +239,64 @@ func (c *collector) pkg(ctx context.Context, tmp, pkg string) {
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = c.o.Root
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if ctx.Err() != nil {
+			return built{}, false
+		}
 		// The package does not build: its tests will always be selected.
 		c.logf("hyrts: %s does not build, its tests will always run: %v\n%s", pkg, err, out)
 		for _, name := range c.declaredTests(pkg) {
 			c.add(&db.Test{Pkg: pkg, Name: name, Status: "fail"})
 		}
-		return
+		return built{}, false
 	}
 	if _, err := os.Stat(bin); err != nil {
-		return // no test files after build constraints
+		return built{}, false // no test files after build constraints
 	}
 	names, err := listTests(ctx, bin, dir)
 	if err != nil {
 		c.logf("hyrts: listing tests of %s: %v\n", pkg, err)
-		return
+		return built{}, false
 	}
+	if only := c.o.Only; only != nil {
+		kept := names[:0]
+		for _, n := range names {
+			if only[pkg][n] {
+				kept = append(kept, n)
+			}
+		}
+		names = kept
+	}
+	return built{pkg: pkg, bin: bin, dir: dir, names: names}, true
+}
+
+// runPkg runs the tests of one package, PerPkg at a time, each holding one
+// of the global slots while its process runs.
+func (c *collector) runPkg(ctx context.Context, tmp string, b built, slots chan struct{}) {
 	start := time.Now()
-	for _, name := range names {
-		if ctx.Err() != nil {
+	local := make(chan struct{}, c.o.PerPkg)
+	var wg sync.WaitGroup
+	for _, name := range b.names {
+		select {
+		case local <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
 			return
 		}
-		c.add(c.runOne(ctx, tmp, bin, dir, pkg, name))
+		select {
+		case slots <- struct{}{}:
+		case <-ctx.Done():
+			<-local
+			wg.Wait()
+			return
+		}
+		wg.Add(1)
+		go func(name string) {
+			defer func() { <-slots; <-local; wg.Done() }()
+			c.add(c.runOne(ctx, tmp, b.bin, b.dir, b.pkg, name))
+		}(name)
 	}
-	c.logf("hyrts: %-60s %4d tests  %6.1fs\n", pkg, len(names), time.Since(start).Seconds())
+	wg.Wait()
+	c.logf("hyrts: %-60s %4d tests  %6.1fs\n", b.pkg, len(b.names), time.Since(start).Seconds())
 }
 
 // declaredTests lists test names from the snapshot, for packages that do not build.

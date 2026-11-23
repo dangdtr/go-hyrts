@@ -202,3 +202,48 @@ func TestEndToEnd(t *testing.T) {
 		})
 	}
 }
+
+func mustRun(t *testing.T, args ...string) string {
+	t.Helper()
+	var out, errb bytes.Buffer
+	if code := Main(args, &out, &errb); code != 0 {
+		t.Fatalf("%v: exit %d: %s%s", args, code, out.String(), errb.String())
+	}
+	return out.String()
+}
+
+// TestUpdate checks the incremental mode: after `collect -update`, the
+// re-collected tests carry their new dependencies and the others keep theirs.
+func TestUpdate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs a module")
+	}
+	root := t.TempDir()
+	writeFiles(t, root, fixture)
+	mustRun(t, "collect", "-C", root, "-j", "4", "-p", "2")
+
+	// Mul now delegates to a new function: only TestMul is affected.
+	calc := strings.Replace(fixture["calc/calc.go"], "func Mul(a, b int) int { return a * b * Scale }",
+		"func Mul(a, b int) int { return mul(a, b) * Scale }\n\nfunc mul(a, b int) int { return a * b }", 1)
+	writeFiles(t, root, map[string]string{"calc/calc.go": calc})
+	if _, ids := selected(t, root); strings.Join(ids, " ") != "calc.TestMul" {
+		t.Fatalf("before update: %v", ids)
+	}
+	if out := mustRun(t, "collect", "-C", root, "-update"); !strings.Contains(out, "updated 1 of") {
+		t.Fatalf("update: %s", out)
+	}
+	if _, ids := selected(t, root); len(ids) != 0 {
+		t.Fatalf("right after update nothing should be selected, got %v", ids)
+	}
+
+	// The new function is now a recorded dependency of TestMul.
+	writeFiles(t, root, map[string]string{"calc/calc.go": strings.Replace(calc, "return a * b }", "return b * a }", 1)})
+	if _, ids := selected(t, root); strings.Join(ids, " ") != "calc.TestMul" {
+		t.Errorf("change to new function: %v, want calc.TestMul", ids)
+	}
+	// Tests that were not re-collected keep their dependencies.
+	writeFiles(t, root, map[string]string{"calc/calc.go": strings.Replace(calc, "(a + b) * Scale", "(b + a) * Scale", 1)})
+	if _, ids := selected(t, root); strings.Join(ids, " ") != "app.TestSum calc.TestAdd" {
+		t.Errorf("change to Add: %v, want app.TestSum calc.TestAdd", ids)
+	}
+}

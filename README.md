@@ -6,9 +6,11 @@ tests that can be affected by it.
 ```sh
 go install github.com/dangdtr/go-hyrts@latest
 
-hyrts collect                 # once (e.g. nightly): run every test, record its dependencies
-hyrts select -explain         # what would run, and why
-hyrts run -- -race -count=1   # run only the affected tests (flags after -- go to go test)
+hyrts collect                         # once: run every test, record its dependencies
+hyrts select -explain                 # what would run, and why
+hyrts run -- -race -count=1           # run only the affected tests (flags after -- go to go test)
+hyrts run -update -- -race -count=1   # same, then refresh the dependencies of those tests
+hyrts collect -update                 # refresh dependencies of affected tests only
 ```
 
 ## How it works
@@ -44,9 +46,26 @@ uncommitted changes count) and applies these rules:
 | `go.mod`, `go.sum`, `go.work`, `vendor/`, Go version, build tags | everything |
 | test that failed or skipped during collection, or is new | always |
 
-Selection is always against the collected snapshot, not the previous run, so
-consecutive changes stay safe; precision only decreases as the snapshot ages.
-Re-run `hyrts collect` regularly (nightly, or after merges to main).
+Selection is always against the recorded snapshot, so consecutive changes stay
+safe even without updating; precision only decreases as the snapshot ages.
+
+`-update` keeps it fresh cheaply, like HyRTS's offline mode: after the selected
+tests run, only those tests are re-collected and the snapshot moves to the
+current version. Tests that were not selected keep their records, which is
+sound because nothing they depend on changed. A full `hyrts collect` is only
+needed when everything is selected anyway (go.mod, Go version, tags).
+
+## Concurrency
+
+Collection is a goroutine pipeline: builders compile coverage-instrumented
+test binaries (slowest package first, using timings from the previous run),
+and each finished binary immediately starts running its tests while others are
+still compiling. `-j` caps test processes overall (default GOMAXPROCS) and
+`-p` caps them per package (default 1, because tests of one package often
+share fixtures such as a database; raise it when they are isolated). Each test
+still runs in its own process, so coverage never mixes between tests. The
+snapshot (hashing and parsing every file) runs on all cores alongside
+`go list`.
 
 `hyrts run` runs everything selected in one `go test` invocation, keeping the
 go command's package parallelism.

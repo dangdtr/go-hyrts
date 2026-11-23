@@ -13,7 +13,7 @@ import (
 )
 
 // Version is bumped whenever the format changes; older databases are ignored.
-const Version = 1
+const Version = 2
 
 // Test is what one top-level test did during collection.
 type Test struct {
@@ -39,7 +39,7 @@ type DB struct {
 	Commit    string            `json:"commit,omitempty"`
 	Collected time.Time         `json:"collected"`
 	Files     snapshot.Snapshot `json:"files"`
-	Funcs     []string          `json:"func_ids"` // "rel/path.go#Key"
+	Funcs     []string          `json:"func_ids"` // snapshot.FuncID values
 	Tests     map[string]*Test  `json:"tests"`
 }
 
